@@ -1,52 +1,84 @@
-# app.py (Flask Backend)
-from flask import Flask, request, jsonify
-from flask_cors import CORS
+import cv2
 import numpy as np
-from PIL import Image
-import io
 import tensorflow as tf
+from cvzone.HandTrackingModule import HandDetector
 
-# Load your trained model
-model = tf.keras.models.load_model('asl_model.h5')  # Ensure this matches your model
+# Constants
+IMG_SIZE = 64  # Match your model's training size
+OFFSET = 20
 
-# Check model input shape
-input_shape = model.input_shape[1:]
+# Load TFLite model
+interpreter = tf.lite.Interpreter(model_path="model_unquant.tflite")
+interpreter.allocate_tensors()
+input_details = interpreter.get_input_details()
+output_details = interpreter.get_output_details()
 
-# Assuming the labels are A-Z (adjust if different)
-LABELS = [chr(i) for i in range(65, 91)]  # 'A' to 'Z'
+# Confirm model input shape
+expected_shape = input_details[0]['shape']
+print("Model expects input shape:", expected_shape)
 
-# Flask setup
-app = Flask(__name__)
-CORS(app)
+# Load label names
+with open("labels.txt", "r") as f:
+    class_names = [line.strip().split(":")[1] for line in f.readlines()]
 
-# Adjust this function based on model input shape
-def preprocess_image(image_bytes):
-    image = Image.open(io.BytesIO(image_bytes)).convert('RGB')
-    image = image.resize((input_shape[0], input_shape[1]))
-    img_array = np.array(image) / 255.0
-    img_array = img_array.reshape((1, *input_shape))  # (1, height, width, channels)
-    return img_array
+# Initialize webcam
+cap = cv2.VideoCapture(0)
+if not cap.isOpened():
+    print("Cannot access webcam.")
+    exit()
 
-@app.route('/predict', methods=['POST'])
-def predict():
-    if 'image' not in request.files:
-        return jsonify({'error': 'No image provided'}), 400
+# Hand detector
+detector = HandDetector(detectionCon=0.8, maxHands=1)
 
-    try:
-        image_bytes = request.files['image'].read()
-        img_array = preprocess_image(image_bytes)
-        preds = model.predict(img_array)
-        pred_index = np.argmax(preds[0])
-        confidence = float(preds[0][pred_index])
-        pred_label = LABELS[pred_index] if pred_index < len(LABELS) else str(pred_index)
+while True:
+    success, img = cap.read()
+    if not success:
+        print("Failed to read frame from webcam.")
+        continue
 
-        return jsonify({
-            'prediction': pred_label,
-            'confidence': confidence
-        })
-    except Exception as e:
-        print("Error during prediction:", e)
-        return jsonify({'error': str(e)}), 500
+    # Flip the webcam image (to fix reversed view)
+    img = cv2.flip(img, 1)
 
-if __name__ == '__main__':
-    app.run(debug=False)
+    hands, img = detector.findHands(img)
+
+    if hands:
+        hand = hands[0]
+        x, y, w, h = hand['bbox']
+
+        # Crop with padding
+        x1 = max(0, x - OFFSET)
+        y1 = max(0, y - OFFSET)
+        x2 = min(img.shape[1], x + w + OFFSET)
+        y2 = min(img.shape[0], y + h + OFFSET)
+        imCrop = img[y1:y2, x1:x2]
+
+        try:
+            imResized = cv2.resize(imCrop, (IMG_SIZE, IMG_SIZE))
+            imResized = imResized.astype(np.float32) / 255.0
+            imResized = np.expand_dims(imResized, axis=0)
+
+            # Set input and run prediction
+            interpreter.set_tensor(input_details[0]['index'], imResized)
+            interpreter.invoke()
+            prediction = interpreter.get_tensor(output_details[0]['index'])
+            class_index = np.argmax(prediction)
+            predicted_label = class_names[class_index]
+
+            # Display prediction on screen
+            cv2.putText(img, predicted_label, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX,
+                        1, (0, 255, 0), 2)
+            cv2.rectangle(img, (x1, y1), (x2, y2), (255, 0, 255), 2)
+
+            # Show cropped hand
+            cv2.imshow("Cropped Hand", imCrop)
+
+        except Exception as e:
+            print("Prediction error:", e)
+
+    cv2.imshow("ASL Sign Recognition", img)
+
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
+
+cap.release()
+cv2.destroyAllWindows()

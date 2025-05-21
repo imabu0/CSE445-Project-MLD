@@ -12,18 +12,16 @@ This repository contains the implementation of the Machine Learning-based projec
 - [License](#license)
 
 ## Introduction
-This project focuses on leveraging machine learning techniques to solve [briefly describe the problem or goal]. The aim is to [state the purpose or objective of the project].
+This project focuses on leveraging machine learning techniques to solve the communication gap between those who don't know sign language. The aim is to translate sign language into text to speech.
 
 ## Features
-- [Feature 1]
-- [Feature 2]
-- [Feature 3]
+- Hand Sign Recognition (ASL)
 
 ## Technologies Used
 - Python
-- [Library/Framework 1]
-- [Library/Framework 2]
-- [Other tools]
+- Flask
+- Html
+- JavaScript
 
 ## Setup Instructions
 1. Clone the repository:
@@ -42,7 +40,7 @@ This project focuses on leveraging machine learning techniques to solve [briefly
 ## Usage
 1. Run the main script:
     ```bash
-    python main.py
+    python app.py
     ```
 2. Follow the prompts or instructions provided in the terminal.
 
