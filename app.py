@@ -1,82 +1,67 @@
 import cv2
 import numpy as np
-import tensorflow as tf
-from cvzone.HandTrackingModule import HandDetector
+from tensorflow.keras.models import load_model
 
-# Constants
-IMG_SIZE = 64  # Match your model's training size
-OFFSET = 20
+# Load the trained model and class names
+model = load_model("asl_model.h5")
+class_names = np.load("class_names.npy", allow_pickle=True)
 
-# Load TFLite model
-interpreter = tf.lite.Interpreter(model_path="model_unquant.tflite")
-interpreter.allocate_tensors()
-input_details = interpreter.get_input_details()
-output_details = interpreter.get_output_details()
-
-# Confirm model input shape
-expected_shape = input_details[0]['shape']
-print("Model expects input shape:", expected_shape)
-
-# Load label names
-with open("labels.txt", "r") as f:
-    class_names = [line.strip().split(":")[1] for line in f.readlines()]
+# Parameters
+IMG_SIZE = (64, 64)  # Must match training size
 
 # Initialize webcam
 cap = cv2.VideoCapture(0)
-if not cap.isOpened():
-    print("Cannot access webcam.")
-    exit()
 
-# Hand detector
-detector = HandDetector(detectionCon=0.8, maxHands=1)
+# Create a window with a larger size
+cv2.namedWindow("ASL Recognition", cv2.WINDOW_NORMAL)
+cv2.resizeWindow("ASL Recognition", 800, 600)
 
 while True:
-    success, img = cap.read()
-    if not success:
-        print("Failed to read frame from webcam.")
-        continue
-
-    # Flip the webcam image (to fix reversed view)
-    img = cv2.flip(img, 1)
-
-    hands, img = detector.findHands(img)
-
-    if hands:
-        hand = hands[0]
-        x, y, w, h = hand['bbox']
-
-        # Crop with padding
-        x1 = max(0, x - OFFSET)
-        y1 = max(0, y - OFFSET)
-        x2 = min(img.shape[1], x + w + OFFSET)
-        y2 = min(img.shape[0], y + h + OFFSET)
-        imCrop = img[y1:y2, x1:x2]
-
-        try:
-            imResized = cv2.resize(imCrop, (IMG_SIZE, IMG_SIZE))
-            imResized = imResized.astype(np.float32) / 255.0
-            imResized = np.expand_dims(imResized, axis=0)
-
-            # Set input and run prediction
-            interpreter.set_tensor(input_details[0]['index'], imResized)
-            interpreter.invoke()
-            prediction = interpreter.get_tensor(output_details[0]['index'])
-            class_index = np.argmax(prediction)
-            predicted_label = class_names[class_index]
-
-            # Display prediction on screen
-            cv2.putText(img, predicted_label, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX,
-                        1, (0, 255, 0), 2)
-            cv2.rectangle(img, (x1, y1), (x2, y2), (255, 0, 255), 2)
-
-            # Show cropped hand
-            cv2.imshow("Cropped Hand", imCrop)
-
-        except Exception as e:
-            print("Prediction error:", e)
-
-    cv2.imshow("ASL Sign Recognition", img)
-
+    ret, frame = cap.read()
+    if not ret:
+        break
+    
+    # Flip frame for mirror effect
+    frame = cv2.flip(frame, 1)
+    
+    # Get hand region (you can modify this to use hand detection)
+    # For simplicity, we'll use a fixed region
+    height, width = frame.shape[:2]
+    x1, y1 = int(width*0.25), int(height*0.25)
+    x2, y2 = int(width*0.75), int(height*0.75)
+    
+    # Draw rectangle for hand placement guidance
+    cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+    
+    # Extract hand region
+    hand_region = frame[y1:y2, x1:x2]
+    
+    if hand_region.size != 0:
+        # Preprocess the hand region
+        resized = cv2.resize(hand_region, IMG_SIZE)
+        normalized = resized.astype('float32') / 255.0
+        input_tensor = np.expand_dims(normalized, axis=0)
+        
+        # Make prediction
+        predictions = model.predict(input_tensor)
+        predicted_class = np.argmax(predictions[0])
+        confidence = np.max(predictions[0])
+        
+        # Display prediction
+        label = f"{class_names[predicted_class]}: {confidence:.2f}"
+        cv2.putText(frame, label, (x1, y1-10), 
+                    cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+    
+    # Display instructions
+    cv2.putText(frame, "Place your hand in the green box", (10, 30),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+    cv2.putText(frame, "Press 'Q' to quit", (10, 60),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+    
+    # Show the frame
+    cv2.imshow("ASL Recognition", frame)
+    
+    # Exit on 'q' key press
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
 

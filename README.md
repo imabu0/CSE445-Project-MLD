@@ -20,8 +20,8 @@ This project focuses on leveraging machine learning techniques to solve the comm
 ## Technologies Used
 - Python
 - Flask
-- Html
-- JavaScript
+- TensorFlow
+- Numpy
 
 ## Setup Instructions
 1. Clone the repository:
@@ -34,7 +34,7 @@ This project focuses on leveraging machine learning techniques to solve the comm
     ```
 3. Install dependencies:
     ```bash
-    pip install flask tensorflow pillow numpy flask-cors opencv-python
+    pip install flask scikit-learn opencv-python tensorflow numpy
     ```
 
 ## Usage
@@ -42,7 +42,7 @@ This project focuses on leveraging machine learning techniques to solve the comm
     ```bash
     python app.py
     ```
-2. Follow the prompts or instructions provided in the terminal.
+2. Place your hand in the green box.
 
 ## Contributing
 Contributions are welcome! Please follow these steps:

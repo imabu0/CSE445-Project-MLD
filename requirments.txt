@@ -1,4 +1,4 @@
-tensorflow
-opencv-python
-cvzone
-numpy
+scikit-learn>=1.0.2
+opencv-python>=4.5.5
+tensorflow>=2.8.0
+numpy>=1.22.0
